@@ -10,6 +10,7 @@ import io
 import math
 import warnings
 import statistics as stat
+import collections as dict_collections
 
 from itertools import cycle
 #from pandas.plotting import register_matplotlib_converters
@@ -501,6 +502,8 @@ def plot( data, **kwargs ):
         axA1.tick_params(axis='x',rotation=xrotation)
         axA1.xaxis.set_major_formatter(formatter)
 
+    dict_p = dict_collections.defaultdict(list)
+    dict_legend = dict_collections.defaultdict(list)
     addplot = config['addplot']
     if addplot is not None and ptype not in VALID_PMOVE_TYPES:
         # NOTE: If in external_axes_mode, then all code relating
@@ -555,8 +558,10 @@ def plot( data, **kwargs ):
                     apdata = [apdata,]  # make it iterable
                 for column in apdata:
                     ydata = apdata.loc[:,column] if havedf else column
-                    ax = _addplot_columns(panid,panels,ydata,apdict,xdates,config)
+                    ax, p = _addplot_columns(panid,panels,ydata,apdict,xdates,config)
                     _addplot_apply_supplements(ax,apdict)
+                    dict_p[panid].append(p)
+                    dict_legend[panid].append(apdict['legend'])
 
     # fill_between is NOT supported for external_axes_mode
     # (caller can easily call ax.fill_between() themselves).
@@ -684,6 +689,11 @@ def plot( data, **kwargs ):
     if external_axes_mode:
         return None
 
+    # add legend
+    for k, v in dict_p.items():
+        ax = panels.at[k, 'axes'][0]
+        ax.legend(dict_p[k], dict_legend[k])
+
     # Should we create a new kwarg to return a flattened axes list
     # versus a list of tuples of primary and secondary axes?
     # For now, for backwards compatibility, we flatten axes list:
@@ -801,14 +811,15 @@ def _addplot_columns(panid,panels,ydata,apdict,xdates,config):
             #print("apdict['secondary_y'] says secondary_y is",secondary_y)
 
         if secondary_y:
-            ax = panels.at[panid,'axes'][1] 
+            ax = panels.at[panid,'axes'][1]
             panels.at[panid,'used2nd'] = True
-        else: 
+        else:
             ax = panels.at[panid,'axes'][0]
     else:
         ax = apdict['ax']
 
     aptype = apdict['type']
+    p = None
     if aptype == 'scatter':
         size  = apdict['markersize']
         mark  = apdict['marker']
@@ -829,14 +840,14 @@ def _addplot_columns(panid,panels,ydata,apdict,xdates,config):
         color  = apdict['color']
         width  = apdict['width'] if apdict['width'] is not None else 1.6*config['_width_config']['line_width']
         alpha  = apdict['alpha']
-        ax.plot(xdates,ydata,linestyle=ls,color=color,linewidth=width,alpha=alpha)
+        p, = ax.plot(xdates,ydata,linestyle=ls,color=color,linewidth=width,alpha=alpha)
     else:
         raise ValueError('addplot type "'+str(aptype)+'" NOT yet supported.')
 
     if apdict['mav'] is not None:
         apmavprices = _plot_mav(ax,config,xdates,ydata,apdict['mav'])
 
-    return ax
+    return ax, p
 
 def _addplot_apply_supplements(ax,apdict):
     if (apdict['ylabel'] is not None):
@@ -966,6 +977,9 @@ def _valid_addplot_kwargs():
 
         'ax'          : {'Default'      : None,
                          'Validator'    : lambda value: isinstance(value,mpl_axes.Axes) },
+
+        'legend'      : {'Default'      : None,
+                         'Validator'    : lambda value: isinstance(value, str)}
     }
 
     _validate_vkwargs_dict(vkwargs)
